@@ -3,6 +3,7 @@ import { BookOpenIcon, CalendarIcon, MessageSquareIcon } from 'lucide-react'
 import { LibraryTab } from './components/LibraryTab'
 import { PlanningTab } from './components/PlanningTab'
 import { AssistantTab } from './components/AssistantTab'
+import { AdminPanel } from './components/AdminPanel'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import { Library, Planning, ChatMessage } from './types'
 import { initialLibrary } from './data/plans'
@@ -11,6 +12,7 @@ type Tab = 'library' | 'planning' | 'assistant'
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('library')
+  const [isAdminOpen, setIsAdminOpen] = useState(false)
   const [library, setLibrary] = useLocalStorage<Library>('math-planner-library', initialLibrary)
   const [activePlanning, setActivePlanning] = useLocalStorage<Planning | null>(
     'math-planner-active-planning',
@@ -22,6 +24,15 @@ function App() {
   )
 
   const handleLoadPlanning = (planning: Planning) => {
+    setActivePlanning(planning)
+    setActiveTab('planning')
+  }
+
+  const handleLogoTripleClick = () => {
+    setIsAdminOpen(true)
+  }
+
+  const handleCreatePlanning = (planning: Planning) => {
     setActivePlanning(planning)
     setActiveTab('planning')
   }
@@ -38,7 +49,14 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-primary-600 to-primary-700 p-2 rounded-lg">
+              <div 
+                className="bg-gradient-to-br from-primary-600 to-primary-700 p-2 rounded-lg cursor-pointer"
+                onClick={(e) => {
+                  if (e.detail === 3) {
+                    handleLogoTripleClick()
+                  }
+                }}
+              >
                 <BookOpenIcon className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -98,6 +116,12 @@ function App() {
           </p>
         </div>
       </footer>
+
+      <AdminPanel
+        isOpen={isAdminOpen}
+        onClose={() => setIsAdminOpen(false)}
+        onCreatePlanning={handleCreatePlanning}
+      />
     </div>
   )
 }
