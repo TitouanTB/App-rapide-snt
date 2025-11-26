@@ -2,8 +2,12 @@ import { Planning } from '../types'
 
 export const predefinedPlans: Record<string, Planning> = {
   'chapitre-1-nombres-et-calculs': {
+    id: 'chapitre-1-nombres-et-calculs',
     chapterId: 'chapitre-1-nombres-et-calculs',
     chapterName: 'Chapitre 1 – Nombres et calculs',
+    linkedCourseIds: [],
+    linkedImages: [],
+    createdAt: new Date().toISOString(),
     days: [
       {
         dayNum: 1,
@@ -101,6 +105,7 @@ export const initialLibrary = {
               course: {
                 id: 'course-intro-nombres',
                 title: 'Introduction aux nombres',
+                images: [],
                 content: `# Introduction aux nombres
 
 ## Les différents types de nombres
