@@ -1,33 +1,28 @@
 import { useState, useEffect } from 'react'
-import { XIcon, PlusIcon, Loader2Icon, FolderIcon, FileTextIcon } from 'lucide-react'
-import { parseRawText } from '../utils/textParser'
-import { Planning, Library, Course } from '../types'
+import { XIcon, FolderIcon, FileTextIcon, SaveIcon } from 'lucide-react'
+import { Library, Course } from '../types'
 import { 
   getAllCourses, 
   getAllFolders, 
-  getAllCoursesFromFolder,
-  extractTextFromCourses,
-  extractImagesFromCourses
+  getAllCoursesFromFolder
 } from '../utils/courseLinker'
+import { addPlanningConfig } from '../utils/planningManager'
 
 interface AdminPanelProps {
   isOpen: boolean
   onClose: () => void
-  onCreatePlanning: (planning: Planning) => void
   library: Library
 }
 
 type SelectionMode = 'course' | 'folder'
 
-export function AdminPanel({ isOpen, onClose, onCreatePlanning, library }: AdminPanelProps) {
+export function AdminPanel({ isOpen, onClose, library }: AdminPanelProps) {
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('course')
   const [selectedCourseId, setSelectedCourseId] = useState<string>('')
   const [selectedFolderId, setSelectedFolderId] = useState<string>('')
   const [selectedCourseIds, setSelectedCourseIds] = useState<Set<string>>(new Set())
   const [planningName, setPlanningName] = useState('')
-  const [planningText, setPlanningText] = useState('')
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [processingMessage, setProcessingMessage] = useState('')
+  const [keyword, setKeyword] = useState('')
 
   const allCourses = getAllCourses(library.tree)
   const allFolders = getAllFolders(library.tree)
@@ -76,20 +71,7 @@ export function AdminPanel({ isOpen, onClose, onCreatePlanning, library }: Admin
   const selectedCourses = getSelectedCourses()
   const totalImages = selectedCourses.reduce((sum, c) => sum + c.images.length, 0)
 
-  const processingMessages = [
-    'Analyse du contenu...',
-    'Extraction des concepts clés...',
-    'Liaison des cours sélectionnés...',
-    'Extraction des images...',
-    'Génération du planning...',
-    'Structuration des tâches...',
-    'Parsing du texte...',
-    'Formatage des sections...',
-    'Optimisation de la révision...',
-    'Finalisation du planning...',
-  ]
-
-  const handleCreatePlanning = async () => {
+  const handleSaveConfig = () => {
     if (selectedCourses.length === 0) {
       alert('Veuillez sélectionner au moins un cours')
       return
@@ -100,52 +82,22 @@ export function AdminPanel({ isOpen, onClose, onCreatePlanning, library }: Admin
       return
     }
 
-    setIsProcessing(true)
-
-    const totalDuration = 10000 + Math.random() * 10000
-    const messageInterval = totalDuration / processingMessages.length
-
-    let messageIndex = 0
-    setProcessingMessage(processingMessages[0])
-
-    const intervalId = setInterval(() => {
-      messageIndex++
-      if (messageIndex < processingMessages.length) {
-        setProcessingMessage(processingMessages[messageIndex])
-      }
-    }, messageInterval)
-
-    await new Promise(resolve => setTimeout(resolve, totalDuration))
-
-    clearInterval(intervalId)
-
-    const extractedText = extractTextFromCourses(selectedCourses)
-    const extractedImages = extractImagesFromCourses(selectedCourses)
-
-    const fullText = planningText.trim()
-      ? `${planningText}\n\n${extractedText}`
-      : extractedText
-
-    const basePlanning = parseRawText(fullText, planningName)
-
-    const planning: Planning = {
-      ...basePlanning,
-      id: `planning-${Date.now()}`,
-      chapterName: planningName,
-      linkedCourseIds: selectedCourses.map(c => c.id),
-      linkedImages: extractedImages,
-      createdAt: new Date().toISOString(),
+    if (!keyword.trim()) {
+      alert('Veuillez entrer un mot-clé')
+      return
     }
 
-    onCreatePlanning(planning)
+    addPlanningConfig({
+      name: planningName,
+      keyword: keyword,
+      courseIds: selectedCourses.map(c => c.id)
+    })
 
     setPlanningName('')
-    setPlanningText('')
+    setKeyword('')
     setSelectedCourseId('')
     setSelectedFolderId('')
     setSelectedCourseIds(new Set())
-    setIsProcessing(false)
-    setProcessingMessage('')
     onClose()
   }
 
@@ -158,41 +110,19 @@ export function AdminPanel({ isOpen, onClose, onCreatePlanning, library }: Admin
           <div>
             <h2 className="text-2xl font-bold">🔐 Admin Panel</h2>
             <p className="text-sm text-primary-100 mt-1">
-              Créer des plannings de révision personnalisés
+              Configurer des plannings de révision personnalisés
             </p>
           </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-primary-500 rounded-full transition-colors"
-            disabled={isProcessing}
           >
             <XIcon className="w-6 h-6" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {isProcessing ? (
-            <div className="flex flex-col items-center justify-center py-16 space-y-6">
-              <Loader2Icon className="w-16 h-16 text-primary-600 animate-spin" />
-              <div className="text-center">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">
-                  Création du planning en cours...
-                </h3>
-                <p className="text-lg text-primary-600 font-medium animate-pulse">
-                  {processingMessage}
-                </p>
-                <div className="mt-6 max-w-md mx-auto">
-                  <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-gradient-to-r from-primary-500 to-primary-700 h-full rounded-full animate-pulse"
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
+          <>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Mode de sélection
@@ -324,48 +254,46 @@ export function AdminPanel({ isOpen, onClose, onCreatePlanning, library }: Admin
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Texte du planning (optionnel)
+                  Mot-clé de détection <span className="text-red-500">*</span>
                 </label>
-                <textarea
-                  className="input-field w-full resize-none font-mono text-sm"
-                  rows={8}
-                  placeholder="Ajoutez du texte supplémentaire pour le planning, ou laissez vide pour utiliser uniquement le contenu des cours sélectionnés..."
-                  value={planningText}
-                  onChange={(e) => setPlanningText(e.target.value)}
+                <input
+                  type="text"
+                  className="input-field w-full"
+                  placeholder="Ex: contrôle math chapitre 1"
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Le texte sera fusionné avec le contenu des cours sélectionnés
+                  Quand l'utilisateur tapera ce mot-clé dans l'Assistant, le planning sera créé automatiquement
                 </p>
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h4 className="font-semibold text-blue-900 mb-2">💡 Fonctionnement</h4>
                 <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Sélectionnez un ou plusieurs cours à inclure dans le planning</li>
-                  <li>• Le contenu et les images seront automatiquement extraits</li>
-                  <li>• Un planning sur 7 jours sera généré avec des tâches structurées</li>
-                  <li>• Le planning apparaîtra dans l'onglet "Planning"</li>
+                  <li>• Sélectionnez un ou plusieurs cours à inclure dans la configuration</li>
+                  <li>• Définissez un nom et un mot-clé pour cette configuration</li>
+                  <li>• Quand l'utilisateur tapera le mot-clé dans l'Assistant, le planning sera créé</li>
+                  <li>• Le contenu et les images des cours seront automatiquement extraits</li>
+                  <li>• Un planning sur 7 jours sera généré et affiché dans l'onglet "Planning"</li>
                 </ul>
               </div>
             </>
-          )}
         </div>
 
-        {!isProcessing && (
-          <div className="bg-gray-50 border-t border-gray-200 p-6 flex items-center justify-between">
-            <button onClick={onClose} className="btn-secondary">
-              Annuler
-            </button>
-            <button
-              onClick={handleCreatePlanning}
-              className="btn-primary flex items-center gap-2"
-              disabled={selectedCourses.length === 0 || !planningName.trim()}
-            >
-              <PlusIcon className="w-5 h-5" />
-              Créer le planning
-            </button>
-          </div>
-        )}
+        <div className="bg-gray-50 border-t border-gray-200 p-6 flex items-center justify-between">
+          <button onClick={onClose} className="btn-secondary">
+            Annuler
+          </button>
+          <button
+            onClick={handleSaveConfig}
+            className="btn-primary flex items-center gap-2"
+            disabled={selectedCourses.length === 0 || !planningName.trim() || !keyword.trim()}
+          >
+            <SaveIcon className="w-5 h-5" />
+            Enregistrer la configuration
+          </button>
+        </div>
       </div>
     </div>
   )
