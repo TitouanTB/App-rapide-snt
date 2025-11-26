@@ -135,50 +135,47 @@ Tapez "aide" pour plus d'informations.`
     }
 
     onUpdateChatHistory([...chatHistory, userMessage])
+    setInputMessage('')
 
+    // Always show 10-second loader with animated messages
+    setIsGenerating(true)
+    
+    const generatingMessages = [
+      'Traitement...',
+      'Analyse du message...',
+      'Recherche d\'informations...',
+      'Préparation de la réponse...',
+      'Génération en cours...',
+      'Finalisation...',
+    ]
+    
+    const totalDuration = 10000
+    const messageInterval = totalDuration / generatingMessages.length
+    
+    let messageIndex = 0
+    setGeneratingMessage(generatingMessages[0])
+    
+    const intervalId = setInterval(() => {
+      messageIndex++
+      if (messageIndex < generatingMessages.length) {
+        setGeneratingMessage(generatingMessages[messageIndex])
+      }
+    }, messageInterval)
+    
+    // Wait for 10 seconds
+    await new Promise(resolve => setTimeout(resolve, totalDuration))
+    
+    clearInterval(intervalId)
+
+    // Process the message and generate response
     const config = findConfigByKeyword(inputMessage)
     
     if (config) {
-      setIsGenerating(true)
-      
-      const generatingMessages = [
-        'Analyse du contenu...',
-        'Extraction des concepts clés...',
-        'Liaison des cours sélectionnés...',
-        'Extraction des images...',
-        'Génération du planning...',
-        'Structuration des tâches...',
-        'Parsing du texte...',
-        'Formatage des sections...',
-        'Optimisation de la révision...',
-        'Finalisation du planning...',
-      ]
-      
-      const totalDuration = 10000 + Math.random() * 10000
-      const messageInterval = totalDuration / generatingMessages.length
-      
-      let messageIndex = 0
-      setGeneratingMessage(generatingMessages[0])
-      
-      const intervalId = setInterval(() => {
-        messageIndex++
-        if (messageIndex < generatingMessages.length) {
-          setGeneratingMessage(generatingMessages[messageIndex])
-        }
-      }, messageInterval)
-      
-      await new Promise(resolve => setTimeout(resolve, totalDuration))
-      
-      clearInterval(intervalId)
-      
       const allCourses = getAllCourses(library.tree)
       const selectedCourses = allCourses.filter(c => config.courseIds.includes(c.id))
       const newPlanning = createPlanningFromConfig(config, selectedCourses)
       
       onLoadPlanning(newPlanning)
-      
-      setIsGenerating(false)
-      setGeneratingMessage('')
       
       const responseContent = generateResponse(inputMessage, newPlanning.chapterName)
       const assistantMessage: ChatMessage = {
@@ -203,36 +200,6 @@ Tapez "aide" pour plus d'informations.`
         }
         onUpdateChatHistory([...chatHistory, userMessage, assistantMessage])
       } else if (detected.isNewChapter) {
-        setIsGenerating(true)
-        
-        const generatingMessages = [
-          'Génération du planning...',
-          'Analyse du contenu...',
-          'Extraction des concepts clés...',
-          'Parsing du contenu...',
-          'Structuration des tâches...',
-          'Formatage des sections...',
-          'Optimisation de la révision...',
-          'Finalisation du planning...',
-        ]
-        
-        const totalDuration = 10000 + Math.random() * 10000
-        const messageInterval = totalDuration / generatingMessages.length
-        
-        let messageIndex = 0
-        setGeneratingMessage(generatingMessages[0])
-        
-        const intervalId = setInterval(() => {
-          messageIndex++
-          if (messageIndex < generatingMessages.length) {
-            setGeneratingMessage(generatingMessages[messageIndex])
-          }
-        }, messageInterval)
-        
-        await new Promise(resolve => setTimeout(resolve, totalDuration))
-        
-        clearInterval(intervalId)
-        
         const defaultContent = `Révision ${detected.chapterName}
 
 Concepts principaux à maîtriser
@@ -242,9 +209,6 @@ Formules et théorèmes clés`
         
         const newPlanning = parseRawText(defaultContent, detected.chapterName || undefined)
         onLoadPlanning(newPlanning)
-        
-        setIsGenerating(false)
-        setGeneratingMessage('')
         
         const responseContent = generateResponse(inputMessage, newPlanning.chapterName)
         const assistantMessage: ChatMessage = {
@@ -266,7 +230,8 @@ Formules et théorèmes clés`
       }
     }
     
-    setInputMessage('')
+    setIsGenerating(false)
+    setGeneratingMessage('')
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -350,7 +315,7 @@ Formules et théorèmes clés`
                 <Loader2Icon className="w-10 h-10 text-primary-600 animate-spin flex-shrink-0" />
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-1">
-                    Création du planning en cours...
+                    Traitement en cours...
                   </h4>
                   <p className="text-sm text-primary-600 animate-pulse">
                     {generatingMessage}
