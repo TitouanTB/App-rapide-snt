@@ -17,6 +17,7 @@ export function LibraryTab({ library, onUpdateLibrary }: LibraryTabProps) {
   const [addDialogParent, setAddDialogParent] = useState<string | null>(null)
   const [newItemName, setNewItemName] = useState('')
   const [newCourseContent, setNewCourseContent] = useState('')
+  const [fileInputKey, setFileInputKey] = useState(Date.now())
 
   const toggleNode = (nodeId: string) => {
     const newExpanded = new Set(expandedNodes)
@@ -195,6 +196,53 @@ export function LibraryTab({ library, onUpdateLibrary }: LibraryTabProps) {
     setSelectedCourse(updatedCourse)
   }
 
+  const handleImageFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedCourse || !e.target.files) return
+
+    const files = Array.from(e.target.files)
+    const newImages: ImageFile[] = []
+
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        try {
+          const reader = new FileReader()
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+          })
+
+          const newImage: ImageFile = {
+            id: `img-${Date.now()}-${Math.random()}`,
+            name: file.name,
+            dataUrl,
+            uploadedAt: new Date().toISOString(),
+          }
+          newImages.push(newImage)
+        } catch (error) {
+          console.error(`Error processing image ${file.name}:`, error)
+        }
+      }
+    }
+
+    if (newImages.length > 0) {
+      const updatedCourse: Course = {
+        ...selectedCourse,
+        images: [...selectedCourse.images, ...newImages],
+      }
+
+      const updatedTree = updateCourseInTree(library.tree, selectedCourse.id, updatedCourse)
+      onUpdateLibrary({ tree: updatedTree })
+      setSelectedCourse(updatedCourse)
+    }
+
+    setFileInputKey(Date.now())
+  }
+
+  const openImagePicker = () => {
+    document.getElementById('image-upload-input')?.click()
+  }
+
   const renderTree = (nodes: TreeNode[], level: number = 0): JSX.Element => {
     return (
       <div className="space-y-1">
@@ -279,6 +327,24 @@ export function LibraryTab({ library, onUpdateLibrary }: LibraryTabProps) {
           <div className="space-y-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedCourse.title}</h2>
+              <div className="flex gap-3 mb-4">
+                <button
+                  onClick={openImagePicker}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  <ImageIcon className="w-5 h-5" />
+                  📤 Ajouter image/schéma
+                </button>
+              </div>
+              <input
+                id="image-upload-input"
+                key={fileInputKey}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleImageFileSelect}
+                className="hidden"
+              />
               <div
                 {...getRootProps()}
                 className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${

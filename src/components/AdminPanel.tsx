@@ -229,7 +229,11 @@ export function AdminPanel({ isOpen, onClose, onCreatePlanning, library }: Admin
                   <select
                     className="input-field w-full"
                     value={selectedCourseId}
-                    onChange={(e) => setSelectedCourseId(e.target.value)}
+                    onChange={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setSelectedCourseId(e.target.value)
+                    }}
                   >
                     <option value="">Sélectionnez un cours...</option>
                     {allCourses.map(course => (
@@ -250,7 +254,11 @@ export function AdminPanel({ isOpen, onClose, onCreatePlanning, library }: Admin
                     <select
                       className="input-field w-full"
                       value={selectedFolderId}
-                      onChange={(e) => setSelectedFolderId(e.target.value)}
+                      onChange={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setSelectedFolderId(e.target.value)
+                      }}
                     >
                       <option value="">Sélectionnez un dossier...</option>
                       {allFolders.map(folder => (
