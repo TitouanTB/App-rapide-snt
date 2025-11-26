@@ -1,23 +1,86 @@
-import { useState } from 'react'
-import { XIcon, PlusIcon, Loader2Icon } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { XIcon, PlusIcon, Loader2Icon, FolderIcon, FileTextIcon } from 'lucide-react'
 import { parseRawText } from '../utils/textParser'
-import { Planning } from '../types'
+import { Planning, Library, Course } from '../types'
+import { 
+  getAllCourses, 
+  getAllFolders, 
+  getAllCoursesFromFolder,
+  extractTextFromCourses,
+  extractImagesFromCourses
+} from '../utils/courseLinker'
 
 interface AdminPanelProps {
   isOpen: boolean
   onClose: () => void
   onCreatePlanning: (planning: Planning) => void
+  library: Library
 }
 
-export function AdminPanel({ isOpen, onClose, onCreatePlanning }: AdminPanelProps) {
-  const [rawText, setRawText] = useState('')
-  const [chapterName, setChapterName] = useState('')
+type SelectionMode = 'course' | 'folder'
+
+export function AdminPanel({ isOpen, onClose, onCreatePlanning, library }: AdminPanelProps) {
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>('course')
+  const [selectedCourseId, setSelectedCourseId] = useState<string>('')
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('')
+  const [selectedCourseIds, setSelectedCourseIds] = useState<Set<string>>(new Set())
+  const [planningName, setPlanningName] = useState('')
+  const [planningText, setPlanningText] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [processingMessage, setProcessingMessage] = useState('')
+
+  const allCourses = getAllCourses(library.tree)
+  const allFolders = getAllFolders(library.tree)
+
+  const coursesInFolder = selectedFolderId
+    ? getAllCoursesFromFolder(selectedFolderId, library.tree)
+    : []
+
+  useEffect(() => {
+    if (selectionMode === 'course') {
+      setSelectedCourseIds(new Set())
+      setSelectedFolderId('')
+    } else {
+      setSelectedCourseId('')
+    }
+  }, [selectionMode])
+
+  useEffect(() => {
+    if (selectedFolderId && selectionMode === 'folder') {
+      const folderCourses = getAllCoursesFromFolder(selectedFolderId, library.tree)
+      setSelectedCourseIds(new Set(folderCourses.map(c => c.id)))
+    }
+  }, [selectedFolderId, library.tree, selectionMode])
+
+  const toggleCourseSelection = (courseId: string) => {
+    const newSelection = new Set(selectedCourseIds)
+    if (newSelection.has(courseId)) {
+      newSelection.delete(courseId)
+    } else {
+      newSelection.add(courseId)
+    }
+    setSelectedCourseIds(newSelection)
+  }
+
+  const getSelectedCourses = (): Course[] => {
+    if (selectionMode === 'course' && selectedCourseId) {
+      const course = allCourses.find(c => c.id === selectedCourseId)
+      return course ? [course] : []
+    }
+    if (selectionMode === 'folder' && selectedCourseIds.size > 0) {
+      return allCourses.filter(c => selectedCourseIds.has(c.id))
+    }
+    return []
+  }
+
+  const selectedCourses = getSelectedCourses()
+  const totalImages = selectedCourses.reduce((sum, c) => sum + c.images.length, 0)
 
   const processingMessages = [
     'Analyse du contenu...',
     'Extraction des concepts clés...',
+    'Liaison des cours sélectionnés...',
+    'Extraction des images...',
     'Génération du planning...',
     'Structuration des tâches...',
     'Parsing du texte...',
@@ -27,19 +90,24 @@ export function AdminPanel({ isOpen, onClose, onCreatePlanning }: AdminPanelProp
   ]
 
   const handleCreatePlanning = async () => {
-    if (!rawText.trim()) {
-      alert('Veuillez entrer du texte pour créer un planning')
+    if (selectedCourses.length === 0) {
+      alert('Veuillez sélectionner au moins un cours')
+      return
+    }
+
+    if (!planningName.trim()) {
+      alert('Veuillez entrer un nom pour le planning')
       return
     }
 
     setIsProcessing(true)
-    
+
     const totalDuration = 10000 + Math.random() * 10000
     const messageInterval = totalDuration / processingMessages.length
-    
+
     let messageIndex = 0
     setProcessingMessage(processingMessages[0])
-    
+
     const intervalId = setInterval(() => {
       messageIndex++
       if (messageIndex < processingMessages.length) {
@@ -48,14 +116,34 @@ export function AdminPanel({ isOpen, onClose, onCreatePlanning }: AdminPanelProp
     }, messageInterval)
 
     await new Promise(resolve => setTimeout(resolve, totalDuration))
-    
+
     clearInterval(intervalId)
-    
-    const planning = parseRawText(rawText, chapterName || undefined)
+
+    const extractedText = extractTextFromCourses(selectedCourses)
+    const extractedImages = extractImagesFromCourses(selectedCourses)
+
+    const fullText = planningText.trim()
+      ? `${planningText}\n\n${extractedText}`
+      : extractedText
+
+    const basePlanning = parseRawText(fullText, planningName)
+
+    const planning: Planning = {
+      ...basePlanning,
+      id: `planning-${Date.now()}`,
+      chapterName: planningName,
+      linkedCourseIds: selectedCourses.map(c => c.id),
+      linkedImages: extractedImages,
+      createdAt: new Date().toISOString(),
+    }
+
     onCreatePlanning(planning)
-    
-    setRawText('')
-    setChapterName('')
+
+    setPlanningName('')
+    setPlanningText('')
+    setSelectedCourseId('')
+    setSelectedFolderId('')
+    setSelectedCourseIds(new Set())
     setIsProcessing(false)
     setProcessingMessage('')
     onClose()
@@ -95,8 +183,10 @@ export function AdminPanel({ isOpen, onClose, onCreatePlanning }: AdminPanelProp
                 </p>
                 <div className="mt-6 max-w-md mx-auto">
                   <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
-                    <div className="bg-gradient-to-r from-primary-500 to-primary-700 h-full rounded-full animate-pulse" 
-                         style={{ width: '100%' }} />
+                    <div
+                      className="bg-gradient-to-r from-primary-500 to-primary-700 h-full rounded-full animate-pulse"
+                      style={{ width: '100%' }}
+                    />
                   </div>
                 </div>
               </div>
@@ -105,52 +195,146 @@ export function AdminPanel({ isOpen, onClose, onCreatePlanning }: AdminPanelProp
             <>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Nom du chapitre (optionnel)
+                  Mode de sélection
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={selectionMode === 'course'}
+                      onChange={() => setSelectionMode('course')}
+                      className="text-primary-600"
+                    />
+                    <FileTextIcon className="w-4 h-4" />
+                    <span>Sélectionner un cours</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={selectionMode === 'folder'}
+                      onChange={() => setSelectionMode('folder')}
+                      className="text-primary-600"
+                    />
+                    <FolderIcon className="w-4 h-4" />
+                    <span>Sélectionner un dossier</span>
+                  </label>
+                </div>
+              </div>
+
+              {selectionMode === 'course' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Cours
+                  </label>
+                  <select
+                    className="input-field w-full"
+                    value={selectedCourseId}
+                    onChange={(e) => setSelectedCourseId(e.target.value)}
+                  >
+                    <option value="">Sélectionnez un cours...</option>
+                    {allCourses.map(course => (
+                      <option key={course.id} value={course.id}>
+                        {course.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {selectionMode === 'folder' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Dossier
+                    </label>
+                    <select
+                      className="input-field w-full"
+                      value={selectedFolderId}
+                      onChange={(e) => setSelectedFolderId(e.target.value)}
+                    >
+                      <option value="">Sélectionnez un dossier...</option>
+                      {allFolders.map(folder => (
+                        <option key={folder.id} value={folder.id}>
+                          {folder.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedFolderId && coursesInFolder.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Cours dans le dossier (sélectionnez ceux à inclure)
+                      </label>
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-h-48 overflow-y-auto">
+                        {coursesInFolder.map(course => (
+                          <label
+                            key={course.id}
+                            className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-2 rounded"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedCourseIds.has(course.id)}
+                              onChange={() => toggleCourseSelection(course.id)}
+                              className="text-primary-600"
+                            />
+                            <FileTextIcon className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm">{course.title}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {selectedCourses.length > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-green-900 mb-2">✅ Aperçu de la sélection</h4>
+                  <p className="text-sm text-green-800">
+                    <strong>{selectedCourses.length}</strong> cours sélectionné(s),{' '}
+                    <strong>{totalImages}</strong> image(s) trouvée(s)
+                  </p>
+                  <div className="mt-2 text-xs text-green-700">
+                    {selectedCourses.map(c => c.title).join(', ')}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Nom du planning <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   className="input-field w-full"
-                  placeholder="Ex: Chapitre 2 – Géométrie"
-                  value={chapterName}
-                  onChange={(e) => setChapterName(e.target.value)}
+                  placeholder="Ex: Contrôle Math Chap 2"
+                  value={planningName}
+                  onChange={(e) => setPlanningName(e.target.value)}
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Si vide, le nom sera détecté automatiquement depuis le texte
-                </p>
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Contenu du cours (format libre)
+                  Texte du planning (optionnel)
                 </label>
                 <textarea
                   className="input-field w-full resize-none font-mono text-sm"
-                  rows={16}
-                  placeholder="Collez ici le contenu de votre cours en format libre...
-
-Exemple:
-Les forces sont des interactions. Il y a 3 types: contact, distance, gravité.
-Les forces ont magnitude et direction.
-
-Calcul de force:
-F = m × a
-Avec F en Newton, m en kg, a en m/s²
-
-Applications pratiques...
-"
-                  value={rawText}
-                  onChange={(e) => setRawText(e.target.value)}
+                  rows={8}
+                  placeholder="Ajoutez du texte supplémentaire pour le planning, ou laissez vide pour utiliser uniquement le contenu des cours sélectionnés..."
+                  value={planningText}
+                  onChange={(e) => setPlanningText(e.target.value)}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Le texte sera automatiquement formaté et structuré en planning de révision
+                  Le texte sera fusionné avec le contenu des cours sélectionnés
                 </p>
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h4 className="font-semibold text-blue-900 mb-2">💡 Fonctionnement</h4>
                 <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Le texte brut sera analysé et formaté automatiquement</li>
-                  <li>• Les concepts clés seront extraits intelligemment</li>
+                  <li>• Sélectionnez un ou plusieurs cours à inclure dans le planning</li>
+                  <li>• Le contenu et les images seront automatiquement extraits</li>
                   <li>• Un planning sur 7 jours sera généré avec des tâches structurées</li>
                   <li>• Le planning apparaîtra dans l'onglet "Planning"</li>
                 </ul>
@@ -161,16 +345,13 @@ Applications pratiques...
 
         {!isProcessing && (
           <div className="bg-gray-50 border-t border-gray-200 p-6 flex items-center justify-between">
-            <button
-              onClick={onClose}
-              className="btn-secondary"
-            >
+            <button onClick={onClose} className="btn-secondary">
               Annuler
             </button>
             <button
               onClick={handleCreatePlanning}
               className="btn-primary flex items-center gap-2"
-              disabled={!rawText.trim()}
+              disabled={selectedCourses.length === 0 || !planningName.trim()}
             >
               <PlusIcon className="w-5 h-5" />
               Créer le planning

@@ -3,12 +3,20 @@ export interface Course {
   title: string
   content: string
   pdfs: PDFFile[]
+  images: ImageFile[]
 }
 
 export interface PDFFile {
   id: string
   name: string
   extractedText: string
+  uploadedAt: string
+}
+
+export interface ImageFile {
+  id: string
+  name: string
+  dataUrl: string
   uploadedAt: string
 }
 
@@ -32,9 +40,13 @@ export interface PlanningDay {
 }
 
 export interface Planning {
+  id: string
   chapterId: string
   chapterName: string
   days: PlanningDay[]
+  linkedCourseIds: string[]
+  linkedImages: ImageFile[]
+  createdAt: string
 }
 
 export interface ChatMessage {
@@ -46,6 +58,7 @@ export interface ChatMessage {
 
 export interface AppState {
   library: Library
-  activePlanning: Planning | null
+  plannings: Planning[]
+  activePlanningId: string | null
   chatHistory: ChatMessage[]
 }

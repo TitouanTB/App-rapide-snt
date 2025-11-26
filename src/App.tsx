@@ -14,8 +14,9 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>('library')
   const [isAdminOpen, setIsAdminOpen] = useState(false)
   const [library, setLibrary] = useLocalStorage<Library>('math-planner-library', initialLibrary)
-  const [activePlanning, setActivePlanning] = useLocalStorage<Planning | null>(
-    'math-planner-active-planning',
+  const [plannings, setPlannings] = useLocalStorage<Planning[]>('math-planner-plannings', [])
+  const [activePlanningId, setActivePlanningId] = useLocalStorage<string | null>(
+    'math-planner-active-planning-id',
     null
   )
   const [chatHistory, setChatHistory] = useLocalStorage<ChatMessage[]>(
@@ -24,7 +25,15 @@ function App() {
   )
 
   const handleLoadPlanning = (planning: Planning) => {
-    setActivePlanning(planning)
+    const existingIndex = plannings.findIndex(p => p.id === planning.id)
+    if (existingIndex >= 0) {
+      const updatedPlannings = [...plannings]
+      updatedPlannings[existingIndex] = planning
+      setPlannings(updatedPlannings)
+    } else {
+      setPlannings([...plannings, planning])
+    }
+    setActivePlanningId(planning.id)
     setActiveTab('planning')
   }
 
@@ -33,8 +42,16 @@ function App() {
   }
 
   const handleCreatePlanning = (planning: Planning) => {
-    setActivePlanning(planning)
+    setPlannings([...plannings, planning])
+    setActivePlanningId(planning.id)
     setActiveTab('planning')
+  }
+
+  const handleDeletePlanning = (planningId: string) => {
+    setPlannings(plannings.filter(p => p.id !== planningId))
+    if (activePlanningId === planningId) {
+      setActivePlanningId(plannings.length > 1 ? plannings[0].id : null)
+    }
   }
 
   const tabs = [
@@ -49,7 +66,7 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div 
+              <div
                 className="bg-gradient-to-br from-primary-600 to-primary-700 p-2 rounded-lg cursor-pointer"
                 onClick={(e) => {
                   if (e.detail === 3) {
@@ -97,7 +114,12 @@ function App() {
             <LibraryTab library={library} onUpdateLibrary={setLibrary} />
           )}
           {activeTab === 'planning' && (
-            <PlanningTab planning={activePlanning} onUpdatePlanning={setActivePlanning} />
+            <PlanningTab
+              plannings={plannings}
+              activePlanningId={activePlanningId}
+              onSetActivePlanning={setActivePlanningId}
+              onDeletePlanning={handleDeletePlanning}
+            />
           )}
           {activeTab === 'assistant' && (
             <AssistantTab
@@ -121,6 +143,7 @@ function App() {
         isOpen={isAdminOpen}
         onClose={() => setIsAdminOpen(false)}
         onCreatePlanning={handleCreatePlanning}
+        library={library}
       />
     </div>
   )

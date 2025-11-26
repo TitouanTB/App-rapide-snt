@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { FolderIcon, FileTextIcon, PlusIcon, UploadIcon, ChevronRightIcon, ChevronDownIcon, XIcon } from 'lucide-react'
+import { FolderIcon, FileTextIcon, PlusIcon, UploadIcon, ChevronRightIcon, ChevronDownIcon, XIcon, ImageIcon } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
-import { TreeNode, Course, Library, PDFFile } from '../types'
+import { TreeNode, Course, Library, PDFFile, ImageFile } from '../types'
+import { transcribeContentToFormat } from '../utils/courseLinker'
 
 interface LibraryTabProps {
   library: Library
@@ -50,6 +51,7 @@ export function LibraryTab({ library, onUpdateLibrary }: LibraryTabProps) {
           title: newItemName,
           content: newCourseContent,
           pdfs: [],
+          images: [],
         }
       } : {}),
     }
@@ -106,6 +108,7 @@ export function LibraryTab({ library, onUpdateLibrary }: LibraryTabProps) {
     if (!selectedCourse) return
 
     const newPdfs: PDFFile[] = []
+    const newImages: ImageFile[] = []
 
     for (const file of acceptedFiles) {
       if (file.type === 'application/pdf') {
@@ -122,13 +125,33 @@ export function LibraryTab({ library, onUpdateLibrary }: LibraryTabProps) {
         } catch (error) {
           console.error(`Error processing PDF ${file.name}:`, error)
         }
+      } else if (file.type.startsWith('image/')) {
+        try {
+          const reader = new FileReader()
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+          })
+
+          const newImage: ImageFile = {
+            id: `img-${Date.now()}-${Math.random()}`,
+            name: file.name,
+            dataUrl,
+            uploadedAt: new Date().toISOString(),
+          }
+          newImages.push(newImage)
+        } catch (error) {
+          console.error(`Error processing image ${file.name}:`, error)
+        }
       }
     }
 
-    if (newPdfs.length > 0) {
+    if (newPdfs.length > 0 || newImages.length > 0) {
       const updatedCourse: Course = {
         ...selectedCourse,
         pdfs: [...selectedCourse.pdfs, ...newPdfs],
+        images: [...selectedCourse.images, ...newImages],
       }
 
       const updatedTree = updateCourseInTree(library.tree, selectedCourse.id, updatedCourse)
@@ -139,7 +162,10 @@ export function LibraryTab({ library, onUpdateLibrary }: LibraryTabProps) {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'application/pdf': ['.pdf'] },
+    accept: {
+      'application/pdf': ['.pdf'],
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
+    },
     multiple: true,
   })
 
@@ -149,6 +175,19 @@ export function LibraryTab({ library, onUpdateLibrary }: LibraryTabProps) {
     const updatedCourse: Course = {
       ...selectedCourse,
       pdfs: selectedCourse.pdfs.filter(pdf => pdf.id !== pdfId),
+    }
+
+    const updatedTree = updateCourseInTree(library.tree, selectedCourse.id, updatedCourse)
+    onUpdateLibrary({ tree: updatedTree })
+    setSelectedCourse(updatedCourse)
+  }
+
+  const removeImage = (imageId: string) => {
+    if (!selectedCourse) return
+
+    const updatedCourse: Course = {
+      ...selectedCourse,
+      images: selectedCourse.images.filter(img => img.id !== imageId),
     }
 
     const updatedTree = updateCourseInTree(library.tree, selectedCourse.id, updatedCourse)
@@ -252,8 +291,11 @@ export function LibraryTab({ library, onUpdateLibrary }: LibraryTabProps) {
                 <UploadIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
                 <p className="text-sm text-gray-600">
                   {isDragActive
-                    ? 'Déposez les PDFs ici...'
-                    : 'Glissez-déposez des PDFs ici, ou cliquez pour sélectionner'}
+                    ? 'Déposez les fichiers ici...'
+                    : 'Glissez-déposez des PDFs ou images ici, ou cliquez pour sélectionner'}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Formats acceptés: PDF, PNG, JPG, JPEG, GIF, WEBP
                 </p>
               </div>
             </div>
@@ -282,12 +324,56 @@ export function LibraryTab({ library, onUpdateLibrary }: LibraryTabProps) {
               </div>
             )}
 
+            {selectedCourse.images.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">
+                  <ImageIcon className="w-5 h-5 inline mr-2" />
+                  Images ({selectedCourse.images.length})
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {selectedCourse.images.map(image => (
+                    <div key={image.id} className="relative group border rounded-lg overflow-hidden">
+                      <img
+                        src={image.dataUrl}
+                        alt={image.name}
+                        className="w-full h-32 object-cover"
+                      />
+                      <div className="absolute top-2 right-2">
+                        <button
+                          onClick={() => removeImage(image.id)}
+                          className="p-1 bg-white rounded-full shadow hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <XIcon className="w-4 h-4 text-red-600" />
+                        </button>
+                      </div>
+                      <div className="p-2 bg-gray-50">
+                        <p className="text-xs text-gray-600 truncate">{image.name}</p>
+                        <p className="text-xs text-gray-400">
+                          {new Date(image.uploadedAt).toLocaleDateString('fr-FR')}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div>
               <h3 className="text-lg font-semibold text-gray-800 mb-3">Contenu du cours</h3>
-              <div className="prose prose-sm max-w-none bg-gray-50 rounded-lg p-4">
-                <pre className="whitespace-pre-wrap font-sans text-gray-700">
-                  {selectedCourse.content || 'Aucun contenu pour ce cours.'}
-                </pre>
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                  <h4 className="font-semibold text-blue-900 text-sm mb-2">📚 Format Retranscrit</h4>
+                  <p className="text-xs text-blue-700">
+                    Le contenu est automatiquement structuré en: Concepts clés, Applications et Points à réviser
+                  </p>
+                </div>
+                <div className="prose prose-sm max-w-none">
+                  <pre className="whitespace-pre-wrap font-sans text-gray-700">
+                    {selectedCourse.content
+                      ? transcribeContentToFormat(selectedCourse.content)
+                      : 'Aucun contenu pour ce cours.'}
+                  </pre>
+                </div>
               </div>
             </div>
 

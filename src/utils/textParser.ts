@@ -17,14 +17,19 @@ export function parseRawText(rawText: string, chapterName?: string): Planning {
   const structuredContent = formatIntoStructure(sections, keywords)
   
   const finalChapterName = chapterName || detectChapterName(lines) || 'Nouveau chapitre'
-  const days = generateSevenDayPlan(structuredContent, finalChapterName)
+  const days = generateSevenDayPlan(structuredContent)
   
   const chapterId = `chapter-${Date.now()}`
+  const planningId = `planning-${Date.now()}`
   
   return {
+    id: planningId,
     chapterId,
     chapterName: finalChapterName,
     days,
+    linkedCourseIds: [],
+    linkedImages: [],
+    createdAt: new Date().toISOString(),
   }
 }
 
@@ -125,7 +130,7 @@ function extractKeywords(text: string): string[] {
 
 function cleanText(text: string): string {
   return text
-    .replace(/^[#*\-•\d+\.\)]+\s*/, '')
+    .replace(/^[#*\-•\d+.)]+\s*/, '')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -170,7 +175,7 @@ function summarizeLongText(text: string, keywords: string[]): string {
   return sentences[0].trim().slice(0, 100)
 }
 
-function generateSevenDayPlan(structuredContent: string[], chapterName: string): any[] {
+function generateSevenDayPlan(structuredContent: string[]): any[] {
   const days = []
   const contentPerDay = Math.ceil(structuredContent.length / 7)
   
