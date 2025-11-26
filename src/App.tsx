@@ -41,12 +41,6 @@ function App() {
     setIsAdminOpen(true)
   }
 
-  const handleCreatePlanning = (planning: Planning) => {
-    setPlannings([...plannings, planning])
-    setActivePlanningId(planning.id)
-    setActiveTab('planning')
-  }
-
   const handleDeletePlanning = (planningId: string) => {
     setPlannings(plannings.filter(p => p.id !== planningId))
     if (activePlanningId === planningId) {
@@ -126,6 +120,7 @@ function App() {
               chatHistory={chatHistory}
               onUpdateChatHistory={setChatHistory}
               onLoadPlanning={handleLoadPlanning}
+              library={library}
             />
           )}
         </div>
@@ -142,7 +137,6 @@ function App() {
       <AdminPanel
         isOpen={isAdminOpen}
         onClose={() => setIsAdminOpen(false)}
-        onCreatePlanning={handleCreatePlanning}
         library={library}
       />
     </div>

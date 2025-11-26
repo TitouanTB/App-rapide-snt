@@ -1,16 +1,19 @@
 import { useState, useRef, useEffect } from 'react'
 import { SendIcon, BotIcon, UserIcon, Loader2Icon } from 'lucide-react'
-import { ChatMessage, Planning } from '../types'
+import { ChatMessage, Planning, Library } from '../types'
 import { predefinedPlans } from '../data/plans'
 import { parseRawText } from '../utils/textParser'
+import { findConfigByKeyword, createPlanningFromConfig } from '../utils/planningManager'
+import { getAllCourses } from '../utils/courseLinker'
 
 interface AssistantTabProps {
   chatHistory: ChatMessage[]
   onUpdateChatHistory: (history: ChatMessage[]) => void
   onLoadPlanning: (planning: Planning) => void
+  library: Library
 }
 
-export function AssistantTab({ chatHistory, onUpdateChatHistory, onLoadPlanning }: AssistantTabProps) {
+export function AssistantTab({ chatHistory, onUpdateChatHistory, onLoadPlanning, library }: AssistantTabProps) {
   const [inputMessage, setInputMessage] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatingMessage, setGeneratingMessage] = useState('')
@@ -133,28 +136,19 @@ Tapez "aide" pour plus d'informations.`
 
     onUpdateChatHistory([...chatHistory, userMessage])
 
-    const detected = detectPlanningRequest(inputMessage)
+    const config = findConfigByKeyword(inputMessage)
     
-    if (detected.planning) {
-      onLoadPlanning(detected.planning)
-      
-      const responseContent = generateResponse(inputMessage)
-      const assistantMessage: ChatMessage = {
-        id: `msg-${Date.now()}-assistant`,
-        role: 'assistant',
-        content: responseContent,
-        timestamp: new Date().toISOString(),
-      }
-      onUpdateChatHistory([...chatHistory, userMessage, assistantMessage])
-    } else if (detected.isNewChapter) {
+    if (config) {
       setIsGenerating(true)
       
       const generatingMessages = [
-        'Génération du planning...',
         'Analyse du contenu...',
         'Extraction des concepts clés...',
-        'Parsing du contenu...',
+        'Liaison des cours sélectionnés...',
+        'Extraction des images...',
+        'Génération du planning...',
         'Structuration des tâches...',
+        'Parsing du texte...',
         'Formatage des sections...',
         'Optimisation de la révision...',
         'Finalisation du planning...',
@@ -177,14 +171,10 @@ Tapez "aide" pour plus d'informations.`
       
       clearInterval(intervalId)
       
-      const defaultContent = `Révision ${detected.chapterName}
-
-Concepts principaux à maîtriser
-Exercices et applications pratiques
-Méthodes de résolution
-Formules et théorèmes clés`
+      const allCourses = getAllCourses(library.tree)
+      const selectedCourses = allCourses.filter(c => config.courseIds.includes(c.id))
+      const newPlanning = createPlanningFromConfig(config, selectedCourses)
       
-      const newPlanning = parseRawText(defaultContent, detected.chapterName || undefined)
       onLoadPlanning(newPlanning)
       
       setIsGenerating(false)
@@ -199,14 +189,81 @@ Formules et théorèmes clés`
       }
       onUpdateChatHistory([...chatHistory, userMessage, assistantMessage])
     } else {
-      const responseContent = generateResponse(inputMessage)
-      const assistantMessage: ChatMessage = {
-        id: `msg-${Date.now()}-assistant`,
-        role: 'assistant',
-        content: responseContent,
-        timestamp: new Date().toISOString(),
+      const detected = detectPlanningRequest(inputMessage)
+      
+      if (detected.planning) {
+        onLoadPlanning(detected.planning)
+        
+        const responseContent = generateResponse(inputMessage)
+        const assistantMessage: ChatMessage = {
+          id: `msg-${Date.now()}-assistant`,
+          role: 'assistant',
+          content: responseContent,
+          timestamp: new Date().toISOString(),
+        }
+        onUpdateChatHistory([...chatHistory, userMessage, assistantMessage])
+      } else if (detected.isNewChapter) {
+        setIsGenerating(true)
+        
+        const generatingMessages = [
+          'Génération du planning...',
+          'Analyse du contenu...',
+          'Extraction des concepts clés...',
+          'Parsing du contenu...',
+          'Structuration des tâches...',
+          'Formatage des sections...',
+          'Optimisation de la révision...',
+          'Finalisation du planning...',
+        ]
+        
+        const totalDuration = 10000 + Math.random() * 10000
+        const messageInterval = totalDuration / generatingMessages.length
+        
+        let messageIndex = 0
+        setGeneratingMessage(generatingMessages[0])
+        
+        const intervalId = setInterval(() => {
+          messageIndex++
+          if (messageIndex < generatingMessages.length) {
+            setGeneratingMessage(generatingMessages[messageIndex])
+          }
+        }, messageInterval)
+        
+        await new Promise(resolve => setTimeout(resolve, totalDuration))
+        
+        clearInterval(intervalId)
+        
+        const defaultContent = `Révision ${detected.chapterName}
+
+Concepts principaux à maîtriser
+Exercices et applications pratiques
+Méthodes de résolution
+Formules et théorèmes clés`
+        
+        const newPlanning = parseRawText(defaultContent, detected.chapterName || undefined)
+        onLoadPlanning(newPlanning)
+        
+        setIsGenerating(false)
+        setGeneratingMessage('')
+        
+        const responseContent = generateResponse(inputMessage, newPlanning.chapterName)
+        const assistantMessage: ChatMessage = {
+          id: `msg-${Date.now()}-assistant`,
+          role: 'assistant',
+          content: responseContent,
+          timestamp: new Date().toISOString(),
+        }
+        onUpdateChatHistory([...chatHistory, userMessage, assistantMessage])
+      } else {
+        const responseContent = generateResponse(inputMessage)
+        const assistantMessage: ChatMessage = {
+          id: `msg-${Date.now()}-assistant`,
+          role: 'assistant',
+          content: responseContent,
+          timestamp: new Date().toISOString(),
+        }
+        onUpdateChatHistory([...chatHistory, userMessage, assistantMessage])
       }
-      onUpdateChatHistory([...chatHistory, userMessage, assistantMessage])
     }
     
     setInputMessage('')
